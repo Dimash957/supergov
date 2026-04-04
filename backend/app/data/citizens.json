@@ -1,0 +1,16 @@
+[
+  {
+    "iin": "870412300415",
+    "full_name": "Смаилов Арлан Бекович",
+    "birth_date": "1987-04-12",
+    "gender": "M",
+    "address": "г. Астана, ул. Кабанбай батыра, 11",
+    "has_eds": true,
+    "eds_expires": "2026-12-01",
+    "tax_debt": 0,
+    "tax_regime": "simplified",
+    "family": [{"relation": "child", "age": 3, "name": "Смаилова Айша"}],
+    "income_monthly": 250000,
+    "bank_accounts": ["Kaspi Bank"]
+  }
+]

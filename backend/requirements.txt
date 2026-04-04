@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+anthropic
+supabase
+redis
+celery
+python-multipart
+httpx
+pydantic
+python-jose[cryptography]
+python-dotenv
+reportlab
+pytesseract
+Pillow
+pyproj

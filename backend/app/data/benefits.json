@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Пособие по рождению ребенка",
+    "description": "Единовременная выплата на рождение первого, второго и третьего ребенка",
+    "amount_min": 140000,
+    "amount_max": 230000,
+    "frequency": "one_time",
+    "criteria": {"has_children": true, "max_child_age": 1},
+    "agency": "Министерство труда РК",
+    "service_type": "child_benefit"
+  }
+]

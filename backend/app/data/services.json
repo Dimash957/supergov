@@ -1,0 +1,16 @@
+[
+  {
+    "id": "sv-001",
+    "name": "Открытие ИП онлайн",
+    "type": "register_ip",
+    "agency": "КГД МФ РК",
+    "avg_days": 1
+  },
+  {
+    "id": "sv-002",
+    "name": "Пособие по рождению",
+    "type": "child_benefit",
+    "agency": "Министерство труда РК",
+    "avg_days": 3
+  }
+]
