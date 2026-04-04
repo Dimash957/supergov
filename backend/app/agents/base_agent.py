@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from anthropic import Anthropic, AsyncAnthropic
 from app.redis_client import redis_client

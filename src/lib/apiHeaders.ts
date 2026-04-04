@@ -1,3 +1,5 @@
+import { requireStack } from './stack';
+
 const OTP_KEY = 'supergov_otp_token';
 
 export function getOtpToken(): string | null {
@@ -18,6 +20,18 @@ type StackSessionUser = {
   getTokens?: () => Promise<{ accessToken: string | null }>;
 } | null;
 
+async function tokenFromStackApp(): Promise<string | null> {
+  try {
+    const app = requireStack();
+    if (typeof app.getAccessToken === 'function') {
+      return await app.getAccessToken();
+    }
+  } catch {
+    /* Stack не инициализирован вне провайдера */
+  }
+  return null;
+}
+
 export async function buildAuthHeaders(stackUser: StackSessionUser): Promise<Record<string, string>> {
   const headers: Record<string, string> = {};
   const otp = getOtpToken();
@@ -25,18 +39,27 @@ export async function buildAuthHeaders(stackUser: StackSessionUser): Promise<Rec
     headers.Authorization = `Bearer ${otp}`;
     return headers;
   }
-  if (!stackUser) return headers;
 
-  if (typeof stackUser.getAccessToken === 'function') {
-    const access = await stackUser.getAccessToken();
-    if (access) {
-      headers.Authorization = `Bearer ${access}`;
-      return headers;
+  if (stackUser) {
+    if (typeof stackUser.getAccessToken === 'function') {
+      const access = await stackUser.getAccessToken();
+      if (access) {
+        headers.Authorization = `Bearer ${access}`;
+        return headers;
+      }
+    }
+    if (typeof stackUser.getTokens === 'function') {
+      const t = await stackUser.getTokens();
+      if (t?.accessToken) {
+        headers.Authorization = `Bearer ${t.accessToken}`;
+        return headers;
+      }
     }
   }
-  if (typeof stackUser.getTokens === 'function') {
-    const t = await stackUser.getTokens();
-    if (t?.accessToken) headers.Authorization = `Bearer ${t.accessToken}`;
+
+  const fromApp = await tokenFromStackApp();
+  if (fromApp) {
+    headers.Authorization = `Bearer ${fromApp}`;
   }
   return headers;
 }

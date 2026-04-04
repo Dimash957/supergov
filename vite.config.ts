@@ -37,6 +37,7 @@ export default defineConfig(({ mode }) => {
     fileEnv.VITE_API_URL ||
     'http://127.0.0.1:8000'
   ).trim()
+  const viteApiUrl = (fileEnv.VITE_API_URL || fileEnv.API_PUBLIC_URL || '').trim()
 
   return {
     // Как в Next.js: NEXT_PUBLIC_* попадает в клиент; плюс стандартный VITE_*.
@@ -53,6 +54,7 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(supabaseAnon),
       'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(supabaseUrl),
       'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(supabaseAnon),
+      'import.meta.env.VITE_API_URL': JSON.stringify(viteApiUrl),
     },
     plugins: [react(), tailwindcss()],
     server: {

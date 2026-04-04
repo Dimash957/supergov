@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -51,15 +53,21 @@ async def register_user(req: RegisterRequest):
     if not req.iin.isdigit():
         raise HTTPException(400, "IIN must be 12 digits")
 
-    db = get_db()
-    existing = db.table("users").select("id").eq("iin", req.iin).execute()
-    if existing.data:
-        raise HTTPException(400, "IIN already registered")
+    try:
+        db = get_db()
+        existing = db.table("users").select("id").eq("iin", req.iin).execute()
+        if existing.data:
+            raise HTTPException(400, "IIN already registered")
+    except Exception as e:
+        if "Invalid API key" in str(e) or "401" in str(e):
+            raise HTTPException(503, 
+                "Database: Invalid Supabase API key. Check SUPABASE_SERVICE_KEY in .env")
+        raise HTTPException(503, f"Database error: {type(e).__name__}")
 
     user_data = {
         "stack_user_id": req.stack_user_id,
         "iin": req.iin,
-        "email": req.email,
+        "email": req.email.strip().lower(),
         "phone": req.phone,
         "full_name": req.full_name,
     }
@@ -79,30 +87,58 @@ async def register_user(req: RegisterRequest):
 
 @router.post("/otp/send")
 async def otp_send(body: OtpSendRequest):
-    db = get_db()
-    found = db.table("users").select("id,email,full_name").eq("email", body.email.strip()).execute()
-    if not found.data:
-        raise HTTPException(404, "Пользователь с таким email не найден. Сначала зарегистрируйтесь.")
+    try:
+        normalized_email = body.email.strip().lower()
+        print(f"\n📧 OTP Send Request for: {normalized_email}")
+        db = get_db()
+        found = db.table("users").select("id,email,full_name").eq("email", normalized_email).execute()
+        if not found.data:
+            print(f"   ❌ User not found")
+            raise HTTPException(404, "Пользователь с таким email не найден. Сначала зарегистрируйтесь.")
 
-    code = generate_code()
-    save_code(body.email, code)
-    ok = NotificationService.send_email(
-        body.email.strip(),
-        "SuperGov — код входа",
-        f"<p>Ваш код для входа: <strong style='font-size:24px'>{code}</strong></p><p>Код действителен 10 минут.</p>",
-    )
-    if not ok:
-        raise HTTPException(503, "Не удалось отправить письмо (проверьте SENDGRID_API_KEY и SENDGRID_FROM_EMAIL)")
-    return {"success": True, "data": {"message": "Код отправлен на email"}}
+        print(f"   ✓ User found: {found.data[0].get('full_name', 'Unknown')}")
+        
+        code = generate_code()
+        print(f"   ✓ Generated code: {code}")
+        
+        save_code(normalized_email, code)
+        print(f"   ✓ Code saved to storage")
+        
+        # Try to send via SendGrid
+        print(f"   📤 Sending email via SendGrid...")
+        ok = NotificationService.send_email(
+            normalized_email,
+            "SuperGov — код входа",
+            f"<p>Ваш код для входа: <strong style='font-size:24px'>{code}</strong></p><p>Код действителен 10 минут.</p>",
+        )
+        
+        if not ok:
+            print(f"   ❌ SendGrid send failed")
+            raise HTTPException(
+                503,
+                "Ошибка отправки кода через SendGrid. Проверьте: 1) API ключ в .env, 2) Email верифицирован в SendGrid, 3) Логи сервера для деталей"
+            )
+        
+        print(f"   ✓ OTP sent successfully")
+        return {"success": True, "data": {"message": "Код отправлен на email"}}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"   ❌ OTP Send Error: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        raise HTTPException(500, f"Ошибка сервера при отправке OTP: {type(e).__name__}")
 
 
 @router.post("/otp/verify")
 async def otp_verify(body: OtpVerifyRequest):
-    if not verify_and_consume(body.email, body.code.strip()):
+    normalized_email = body.email.strip().lower()
+    if not verify_and_consume(normalized_email, body.code.strip()):
         raise HTTPException(400, "Неверный или просроченный код")
 
     db = get_db()
-    user_res = db.table("users").select("*").eq("email", body.email.strip()).execute()
+    user_res = db.table("users").select("*").eq("email", normalized_email).execute()
     if not user_res.data:
         raise HTTPException(404, "Пользователь не найден")
 

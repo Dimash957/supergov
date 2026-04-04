@@ -2,9 +2,11 @@ import { Card, CardContent } from '../../components/ui/Card';
 import { Briefcase, CheckCircle2, Gift, FileText, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
+import { useStore } from '../../store/useStore';
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const user = useStore((state) => state.user);
   
   const stats = [
     { title: 'Активные заявки', value: '2', icon: Briefcase, color: 'text-blue-500', bg: 'bg-blue-100' },
@@ -22,10 +24,12 @@ export function Dashboard() {
     { name: 'Справка о несудимости', path: '/application/new/criminal' },
   ];
 
+  const egov50Function = { name: '🏛️ Все 50+ eGov функций', path: '/egov' };
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-navy">Добрый день, Алихан!</h1>
+        <h1 className="text-2xl font-bold text-navy">Добрый день, {user?.name || 'Пользователь'}!</h1>
         <p className="text-slate-500 mt-1">Здесь сводка ваших государственных услуг и важных уведомлений.</p>
       </div>
 
@@ -87,6 +91,24 @@ export function Dashboard() {
               ))}
             </div>
           </div>
+
+          {/* All eGov Functions Button */}
+          <motion.button
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            onClick={() => navigate('/egov')}
+            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 p-6 rounded-xl text-white shadow-lg hover:shadow-xl transition-all group border-2 border-purple-400/30"
+          >
+            <div className="text-center">
+              <p className="text-sm font-semibold opacity-90 mb-1">РАСШИРЕННО</p>
+              <h3 className="text-2xl font-bold mb-1">🏛️ Все 50+ eGov функций</h3>
+              <p className="text-sm text-white/80 group-hover:text-white transition-colors">Полный каталог государственных услуг с поиском и тестированием</p>
+            </div>
+            <div className="flex justify-center mt-3">
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </motion.button>
           
           <div>
             <h2 className="text-lg font-bold text-navy mb-4">Активные заявки</h2>

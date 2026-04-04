@@ -16,18 +16,22 @@ def generate_code() -> str:
 
 def save_code(email: str, code: str, ttl_sec: int = 600) -> None:
     try:
-        redis_client.client.setex(_key(email), ttl_sec, code)
-    except Exception:
+        if redis_client.client:
+            redis_client.client.setex(_key(email), ttl_sec, code)
+        else:
+            raise Exception("Redis client is None")
+    except Exception as e:
+        print(f"⚠ OTP Storage: Using in-memory fallback (Redis error: {type(e).__name__})")
         _MEMORY[email.lower().strip()] = (code, time.time() + ttl_sec)
 
 
 def verify_and_consume(email: str, code: str) -> bool:
     k = email.lower().strip()
     try:
-        stored = redis_client.client.get(_key(email))
+        stored = redis_client.client.get(_key(k))
         if not stored or stored != code:
             return False
-        redis_client.client.delete(_key(email))
+        redis_client.client.delete(_key(k))
         return True
     except Exception:
         if k not in _MEMORY:

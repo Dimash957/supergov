@@ -21,6 +21,8 @@ import { Benefits } from './pages/benefits/Benefits';
 import { ComplaintsMap } from './pages/map/ComplaintsMap';
 import { AgenciesRating } from './pages/rating/AgenciesRating';
 import { Profile } from './pages/profile/Profile';
+import { EgovPage } from './pages/eGov/EgovPage';
+import { DocumentsPage } from './pages/documents/DocumentsPage';
 import { UserProfileBootstrap } from './components/UserProfileBootstrap';
 import { getOtpToken } from './lib/apiHeaders';
 
@@ -82,6 +84,8 @@ export default function App() {
               <Route path="/map" element={<ComplaintsMap />} />
               <Route path="/rating" element={<AgenciesRating />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/egov" element={<EgovPage />} />
+              <Route path="/documents" element={<DocumentsPage />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
             

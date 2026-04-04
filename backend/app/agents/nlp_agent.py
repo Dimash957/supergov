@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from app.agents.base_agent import BaseAgent
 from app.agents.chat_tools import CHAT_TOOLS, execute_tool
 import json

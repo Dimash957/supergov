@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { useUser } from '@stackframe/stack';
 import { requireStack } from '../../lib/stack';
 import { getApiBase } from '../../lib/apiBase';
-import { clearOtpToken, setOtpToken } from '../../lib/apiHeaders';
+import { clearOtpToken, getOtpToken, setOtpToken } from '../../lib/apiHeaders';
 
 const API_BASE = getApiBase();
 
@@ -73,8 +73,14 @@ export function Login() {
         body: JSON.stringify({ email: email.trim(), code: code.trim() }),
       });
       if (!res.ok) throw new Error(await res.text());
-      const json = (await res.json()) as { data?: { access_token?: string } };
-      const tok = json.data?.access_token;
+      const json = (await res.json()) as {
+        data?: { access_token?: string; accessToken?: string };
+        access_token?: string;
+      };
+      const tok =
+        json.data?.access_token ??
+        json.data?.accessToken ??
+        json.access_token;
       if (!tok) throw new Error('Нет токена');
       setOtpToken(tok);
       toast.success('Вход по коду выполнен');
@@ -86,7 +92,7 @@ export function Login() {
     }
   };
 
-  if (user) {
+  if (user || getOtpToken()) {
     return <Navigate to="/dashboard" replace />;
   }
 

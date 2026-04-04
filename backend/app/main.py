@@ -16,21 +16,38 @@ from app.routers import (
     chat,
     complaints,
     documents,
+    egov,
     family,
     forms,
     legal,
     tson,
     voice,
+    profile_fix,
 )
 
 app = FastAPI(title="SuperGov API")
 
+# allow_origins=["*"] + allow_credentials=True в браузерах некорректно; явные origin для Vite и типичных портов
+_cors_raw = os.getenv("CORS_ORIGINS", "").strip()
+if _cors_raw:
+    _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
+else:
+    _cors_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In prod, restrict to frontend URL
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(auth.router)
@@ -40,6 +57,8 @@ app.include_router(applications.router)
 app.include_router(benefits.router)
 app.include_router(complaints.router)
 app.include_router(documents.router)
+app.include_router(egov.router)
+app.include_router(profile_fix.router)
 app.include_router(agencies.router)
 app.include_router(voice.router)
 app.include_router(analytics.router)

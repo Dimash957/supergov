@@ -47,15 +47,21 @@ export function Register() {
 
       await api.post('/api/auth/register', {
         iin: data.iin,
-        email: data.email,
+        email: data.email.trim().toLowerCase(),
         phone: data.phone,
         full_name: data.name,
         stack_user_id: stackUserId,
       });
 
       setSuccessMode(true);
-    } catch (err) {
-      toast.error('Ошибка при регистрации. Возможно, пользователь уже существует.');
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? String((err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail ?? '')
+          : '';
+      toast.error(
+        msg || 'Ошибка при регистрации. Возможно, пользователь уже существует.',
+      );
     } finally {
       setLoading(false);
     }

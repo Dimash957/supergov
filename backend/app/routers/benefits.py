@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends
 from app.auth import get_current_user
 from app.database import get_db
@@ -8,8 +10,13 @@ router = APIRouter(prefix="/api/benefits", tags=["benefits"])
 @router.get("/")
 async def get_benefits(user: dict = Depends(get_current_user)):
     # Feature 10
-    db = get_db()
-    all_benefits = db.table("benefits").select("*").execute().data
+    try:
+        db = get_db()
+        all_benefits = db.table("benefits").select("*").execute().data
+    except Exception as e:
+        if "Invalid API key" in str(e):
+            raise HTTPException(503, "Supabase connection failed. Invalid API key.")
+        raise HTTPException(503, f"Database error: {type(e).__name__}")
     
     matches = []
     total_min = 0

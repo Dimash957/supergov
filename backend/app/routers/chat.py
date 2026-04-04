@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import time
 
@@ -14,7 +16,7 @@ CHAT_QUEUE_KEY = "supergov:chat_queue"
 
 
 def _enqueue_chat_turn(user: dict, session_id: str, message: str) -> None:
-    """Сохраняет обращение в Redis-очередь (аудит / последующая обработка). Без Redis не падает."""
+    """Сохраняет обращение в Redis-очередь (аудит / последующая обработка). Без Redis — in-memory."""
     try:
         from app.redis_client import redis_client
 
@@ -27,8 +29,7 @@ def _enqueue_chat_turn(user: dict, session_id: str, message: str) -> None:
             },
             ensure_ascii=False,
         )
-        redis_client.client.lpush(CHAT_QUEUE_KEY, payload)
-        redis_client.client.ltrim(CHAT_QUEUE_KEY, 0, 499)
+        redis_client.lpush_trim(CHAT_QUEUE_KEY, payload, 499)
     except Exception:
         pass
 

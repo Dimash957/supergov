@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useStore } from '../../store/useStore';
 import { cn } from '../../lib/utils';
-import { LayoutDashboard, MessageSquare, Briefcase, Map as MapIcon, Star, User } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, Briefcase, Map as MapIcon, Star, User, Building2, FileUp } from 'lucide-react';
 
 export function Sidebar() {
   const { user } = useStore();
@@ -11,6 +11,8 @@ export function Sidebar() {
     { to: '/chat', icon: MessageSquare, label: 'AI Чат' },
     { to: '/services', icon: Briefcase, label: 'Услуги', badge: 18 },
     { to: '/applications', icon: Briefcase, label: 'Заявки' },
+    { to: '/egov', icon: Building2, label: 'eGov (50+)', badge: 50 },
+    { to: '/documents', icon: FileUp, label: 'AI Документы' },
     { to: '/map', icon: MapIcon, label: 'Карта' },
     { to: '/rating', icon: Star, label: 'Рейтинг' },
   ];
