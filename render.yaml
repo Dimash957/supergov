@@ -15,9 +15,9 @@ services:
       - key: DEMO_MODE
         value: "true"
       - key: CORS_ORIGINS
-        value: https://supergov-final.vercel.app
+        value: https://supergov-3cj1.vercel.app
       - key: FRONTEND_URL
-        value: https://supergov-final.vercel.app
+        value: https://supergov-3cj1.vercel.app
       - key: STACK_AUTH_JWKS_URL
         value: https://api.stack-auth.com/api/v1/projects/6a0925d5-467b-40ef-ad9e-265556e73476/.well-known/jwks.json
       - key: STACK_PROJECT_ID
