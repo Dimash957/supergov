@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: supergov-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.1
+      - key: EGOV_MOCK
+        value: "true"
+      - key: DEMO_MODE
+        value: "true"
+      - key: CORS_ORIGINS
+        value: https://supergov-final.vercel.app
+      - key: FRONTEND_URL
+        value: https://supergov-final.vercel.app
+      - key: STACK_AUTH_JWKS_URL
+        value: https://api.stack-auth.com/api/v1/projects/6a0925d5-467b-40ef-ad9e-265556e73476/.well-known/jwks.json
+      - key: STACK_PROJECT_ID
+        value: 6a0925d5-467b-40ef-ad9e-265556e73476
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: SENDGRID_FROM_EMAIL
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
