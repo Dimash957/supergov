@@ -1,10 +1,19 @@
 import json
 import os
+import sys
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Avoid Windows console encoding crashes (cp1251/cp866) on unicode logs.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(errors="replace")
+    except Exception:
+        pass
 
 from app.routers import (
     agencies,
@@ -28,22 +37,50 @@ from app.routers import (
 app = FastAPI(title="SuperGov API")
 
 # allow_origins=["*"] + allow_credentials=True в браузерах некорректно; явные origin для Vite и типичных портов
+def _normalize_origin(value: str) -> str:
+    origin = value.strip().rstrip("/")
+    if not origin:
+        return ""
+    if origin.startswith("http://") or origin.startswith("https://"):
+        return origin
+    return f"https://{origin}"
+
+
 _cors_raw = os.getenv("CORS_ORIGINS", "").strip()
+_cors_origins = {
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+}
+
 if _cors_raw:
-    _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
-else:
-    _cors_origins = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:4173",
-        "http://127.0.0.1:4173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ]
+    for origin in _cors_raw.split(","):
+        normalized = _normalize_origin(origin)
+        if normalized:
+            _cors_origins.add(normalized)
+
+for extra_origin in (
+    os.getenv("FRONTEND_URL", ""),
+    os.getenv("PUBLIC_FRONTEND_URL", ""),
+    os.getenv("APP_FRONTEND_URL", ""),
+    os.getenv("VERCEL_URL", ""),
+):
+    normalized = _normalize_origin(extra_origin)
+    if normalized:
+        _cors_origins.add(normalized)
+
+_cors_origin_regex = os.getenv(
+    "CORS_ORIGIN_REGEX",
+    r"https://.*\.vercel\.app$|https://.*\.railway\.app$",
+).strip() or None
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
+    allow_origins=sorted(_cors_origins),
+    allow_origin_regex=_cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

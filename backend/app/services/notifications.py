@@ -26,21 +26,21 @@ class NotificationService:
         demo_mode = os.getenv("DEMO_MODE", "false").lower() == "true"
         
         if not api_key:
-            print("❌ SendGrid skipping: SENDGRID_API_KEY not set in .env")
+            print("ERROR SendGrid skipping: SENDGRID_API_KEY not set in .env")
             if demo_mode:
                 print(f"  [DEMO] Would send email to {to_email}: {subject}")
             return False
         
         if not from_email:
-            print("❌ SendGrid skipping: SENDGRID_FROM_EMAIL not set in .env")
+            print("ERROR SendGrid skipping: SENDGRID_FROM_EMAIL not set in .env")
             return False
         
         if not re.match(r"^[^@]+@[^@]+\.[^@]+$", from_email):
-            print(f"❌ SendGrid error: Invalid from_email format: {from_email}")
+            print(f"ERROR SendGrid: Invalid from_email format: {from_email}")
             return False
         
         try:
-            print(f"📧 Sending email to {to_email} from {from_email}...")
+            print(f"INFO Sending email to {to_email} from {from_email}...")
             r = httpx.post(
                 "https://api.sendgrid.com/v3/mail/send",
                 headers={
@@ -59,7 +59,7 @@ class NotificationService:
             print(f"   SendGrid Response Status: {r.status_code}")
             
             if r.status_code in (200, 202):
-                print(f"✓ Email sent successfully to {to_email}")
+                print(f"OK Email sent successfully to {to_email}")
                 return True
             else:
                 print(f"   Response Body: {r.text}")
@@ -72,7 +72,7 @@ class NotificationService:
                 except:
                     error_msg = r.text
                 
-                print(f"❌ SendGrid error ({r.status_code}): {error_msg}")
+                print(f"ERROR SendGrid ({r.status_code}): {error_msg}")
                 
                 # Parse common errors
                 if r.status_code == 401:
@@ -89,10 +89,10 @@ class NotificationService:
                 
                 return False
         except httpx.ConnectError as e:
-            print(f"❌ Network error: {e}")
+            print(f"ERROR Network: {e}")
             return False
         except Exception as e:
-            print(f"❌ Unexpected error: {type(e).__name__}: {e}")
+            print(f"ERROR Unexpected: {type(e).__name__}: {e}")
             return False
 
     @staticmethod

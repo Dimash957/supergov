@@ -1,12 +1,18 @@
 /**
- * Компонент для отображения всех 50 eGov функций
- * Заменяет Dashboard hardcoded список функций
+ * Enhanced eGov functions dashboard
+ * - Better UI
+ * - Safer API execution
+ * - Auto-runs core diagnostics on page load
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, CheckCircle2, Clock3, Copy, PlayCircle, Sparkles } from 'lucide-react';
 import { Input } from './ui/Input';
 import { Card } from './ui/Card';
+import { apiClient, formatApiError } from '../lib/apiClient';
 import '../styles/EgovFunctions.css';
+
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 interface EgovFunction {
   id: string;
@@ -14,605 +20,320 @@ interface EgovFunction {
   description: string;
   category: string;
   icon: string;
+  method: HttpMethod;
   endpoint: string;
-  method: string;
+  body?: Record<string, unknown> | string[];
+  autoRun?: boolean;
 }
 
-// Полный список всех 50 eGov функций
+interface FunctionResult {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  durationMs?: number;
+  response?: unknown;
+  error?: string;
+  ranAt?: string;
+}
+
+const TEST_IIN = '870412300415';
+const TEST_EMAIL = 'test@example.com';
+const TEST_REF = 'REF123';
+const TEST_DOC = 'DOC123';
+const TEST_APP = 'APP123';
+const TEST_SERVICE = 'PASSPORT';
+
 const EGOV_FUNCTIONS: EgovFunction[] = [
-  // 1-5: Базовые операции
-  {
-    id: '1',
-    name: 'Здоровье системы',
-    description: 'Проверка здоровья и статуса eGov API',
-    category: 'Core',
-    icon: '⚕️',
-    endpoint: '/api/egov/healthcheck',
-    method: 'GET'
-  },
-  {
-    id: '2',
-    name: 'Версия API',
-    description: 'Получить текущую версию API',
-    category: 'Core',
-    icon: '🔍',
-    endpoint: '/api/egov/version',
-    method: 'GET'
-  },
-  {
-    id: '3',
-    name: 'Статистика',
-    description: 'Получить статистику использования API',
-    category: 'Core',
-    icon: '📊',
-    endpoint: '/api/egov/stats',
-    method: 'GET'
-  },
-  {
-    id: '4',
-    name: 'Кэш',
-    description: 'Управление кэшем API',
-    category: 'Core',
-    icon: '💾',
-    endpoint: '/api/egov/cache',
-    method: 'GET'
-  },
-  {
-    id: '5',
-    name: 'Статус',
-    description: 'Текущий статус всех сервисов',
-    category: 'Core',
-    icon: '🟢',
-    endpoint: '/api/egov/status',
-    method: 'GET'
-  },
+  { id: '1', name: 'Здоровье системы', description: 'Проверка здоровья API', category: 'Core', icon: '⚕️', method: 'GET', endpoint: '/api/egov/health', autoRun: true },
+  { id: '2', name: 'Версия API', description: 'Текущая версия API', category: 'Core', icon: '🔎', method: 'GET', endpoint: '/api/egov/version', autoRun: true },
+  { id: '3', name: 'Статистика', description: 'Статистика использования eGov', category: 'Core', icon: '📊', method: 'GET', endpoint: '/api/egov/stats', autoRun: true },
+  { id: '4', name: 'Статус сервисов', description: 'Сводный статус eGov', category: 'Core', icon: '🟢', method: 'GET', endpoint: '/api/egov/status' },
+  { id: '5', name: 'Сброс кэша', description: 'Очистка кэша сервиса', category: 'Core', icon: '🧹', method: 'POST', endpoint: '/api/egov/cache/reset' },
 
-  // 6-15: Каталог услуг
-  {
-    id: '6',
-    name: 'Все услуги',
-    description: 'Получить полный каталог всех услуг',
-    category: 'Services',
-    icon: '📋',
-    endpoint: '/api/egov/services',
-    method: 'GET'
-  },
-  {
-    id: '7',
-    name: 'Поиск услуг',
-    description: 'Найти услугу по названию или коду',
-    category: 'Services',
-    icon: '🔎',
-    endpoint: '/api/egov/services/search',
-    method: 'POST'
-  },
-  {
-    id: '8',
-    name: 'Требования услуги',
-    description: 'Получить требования для конкретной услуги',
-    category: 'Services',
-    icon: '📄',
-    endpoint: '/api/egov/services/requirements',
-    method: 'GET'
-  },
-  {
-    id: '9',
-    name: 'Документы услуги',
-    description: 'Получить список требуемых документов',
-    category: 'Services',
-    icon: '📑',
-    endpoint: '/api/egov/services/documents',
-    method: 'GET'
-  },
-  {
-    id: '10',
-    name: 'Стоимость услуги',
-    description: 'Получить стоимость услуги',
-    category: 'Services',
-    icon: '💰',
-    endpoint: '/api/egov/services/cost',
-    method: 'GET'
-  },
-  {
-    id: '11',
-    name: 'Сроки услуги',
-    description: 'Получить сроки обработки услуги',
-    category: 'Services',
-    icon: '⏱️',
-    endpoint: '/api/egov/services/deadlines',
-    method: 'GET'
-  },
-  {
-    id: '12',
-    name: 'Заведомо ложная информация',
-    description: 'Проверить достоверность информации',
-    category: 'Services',
-    icon: '✅',
-    endpoint: '/api/egov/services/verify',
-    method: 'POST'
-  },
-  {
-    id: '13',
-    name: 'Отзывы услуги',
-    description: 'Получить отзывы о услуге',
-    category: 'Services',
-    icon: '⭐',
-    endpoint: '/api/egov/services/reviews',
-    method: 'GET'
-  },
-  {
-    id: '14',
-    name: 'Похожие услуги',
-    description: 'Найти похожие услуги',
-    category: 'Services',
-    icon: '🔗',
-    endpoint: '/api/egov/services/related',
-    method: 'GET'
-  },
-  {
-    id: '15',
-    name: 'Описание услуги',
-    description: 'Получить полное описание услуги',
-    category: 'Services',
-    icon: '📚',
-    endpoint: '/api/egov/services/description',
-    method: 'GET'
-  },
+  { id: '6', name: 'Каталог услуг', description: 'Список всех услуг', category: 'Services', icon: '📚', method: 'GET', endpoint: '/api/egov/services' },
+  { id: '7', name: 'Поиск услуг', description: 'Поиск по слову passport', category: 'Services', icon: '🔍', method: 'GET', endpoint: '/api/egov/services/search?query=passport' },
+  { id: '8', name: 'Услуги по категории', description: 'Услуги категории documents', category: 'Services', icon: '🗂️', method: 'GET', endpoint: '/api/egov/services/documents' },
+  { id: '9', name: 'Детали услуги', description: 'Подробности по услуге PASSPORT', category: 'Services', icon: '📘', method: 'GET', endpoint: '/api/egov/services/PASSPORT/details' },
+  { id: '10', name: 'Требования услуги', description: 'Требования к PASSPORT', category: 'Services', icon: '✅', method: 'GET', endpoint: '/api/egov/services/PASSPORT/requirements' },
 
-  // 16-25: Заявления
-  {
-    id: '16',
-    name: 'Подать заявление',
-    description: 'Подать новое заявление на услугу',
-    category: 'Applications',
-    icon: '📝',
-    endpoint: '/api/egov/applications/submit',
-    method: 'POST'
-  },
-  {
-    id: '17',
-    name: 'Статус заявления',
-    description: 'Проверить статус заявления',
-    category: 'Applications',
-    icon: '📍',
-    endpoint: '/api/egov/applications/status',
-    method: 'GET'
-  },
-  {
-    id: '18',
-    name: 'Отмена заявления',
-    description: 'Отменить поданное заявление',
-    category: 'Applications',
-    icon: '❌',
-    endpoint: '/api/egov/applications/cancel',
-    method: 'POST'
-  },
-  {
-    id: '19',
-    name: 'История заявлений',
-    description: 'Получить историю всех заявлений',
-    category: 'Applications',
-    icon: '📜',
-    endpoint: '/api/egov/applications/history',
-    method: 'GET'
-  },
-  {
-    id: '20',
-    name: 'Загрузить документ',
-    description: 'Загрузить документ к заявлению',
-    category: 'Applications',
-    icon: '📎',
-    endpoint: '/api/egov/applications/upload',
-    method: 'POST'
-  },
-  {
-    id: '21',
-    name: 'Опрос заявления',
-    description: 'Опросить статус в реальном времени',
-    category: 'Applications',
-    icon: '🔄',
-    endpoint: '/api/egov/applications/poll',
-    method: 'POST'
-  },
-  {
-    id: '22',
-    name: 'Пакетная подача',
-    description: 'Подать несколько заявлений одновременно',
-    category: 'Applications',
-    icon: '📦',
-    endpoint: '/api/egov/applications/batch',
-    method: 'POST'
-  },
-  {
-    id: '23',
-    name: 'Возобновить заявление',
-    description: 'Возобновить отклоненное заявление',
-    category: 'Applications',
-    icon: '🔁',
-    endpoint: '/api/egov/applications/resubmit',
-    method: 'POST'
-  },
-  {
-    id: '24',
-    name: 'Черновики',
-    description: 'Получить список черновиков заявлений',
-    category: 'Applications',
-    icon: '📑',
-    endpoint: '/api/egov/applications/drafts',
-    method: 'GET'
-  },
-  {
-    id: '25',
-    name: 'Комментарии заявления',
-    description: 'Получить комментарии к заявлению',
-    category: 'Applications',
-    icon: '💬',
-    endpoint: '/api/egov/applications/comments',
-    method: 'GET'
-  },
+  { id: '11', name: 'Документы услуги', description: 'Список документов для PASSPORT', category: 'Services', icon: '📄', method: 'GET', endpoint: '/api/egov/services/PASSPORT/documents' },
+  { id: '12', name: 'Стоимость услуги', description: 'Стоимость PASSPORT', category: 'Services', icon: '💳', method: 'GET', endpoint: '/api/egov/services/PASSPORT/cost' },
+  { id: '13', name: 'Срок обработки', description: 'Срок обработки PASSPORT', category: 'Services', icon: '⏱️', method: 'GET', endpoint: '/api/egov/services/PASSPORT/processing-time' },
+  { id: '14', name: 'Офисы услуги', description: 'Офисы обслуживания PASSPORT', category: 'Services', icon: '🏢', method: 'GET', endpoint: '/api/egov/services/PASSPORT/offices' },
+  { id: '15', name: 'FAQ услуги', description: 'FAQ по PASSPORT', category: 'Services', icon: '❓', method: 'GET', endpoint: '/api/egov/services/PASSPORT/faq' },
 
-  // 26-35: Документы
-  {
-    id: '26',
-    name: 'Получить документы',
-    description: 'Получить список документов пользователя',
-    category: 'Documents',
-    icon: '📄',
-    endpoint: '/api/egov/documents/list',
-    method: 'GET'
-  },
-  {
-    id: '27',
-    name: 'Верификация документа',
-    description: 'Проверить подлинность документа',
-    category: 'Documents',
-    icon: '✔️',
-    endpoint: '/api/egov/documents/verify',
-    method: 'POST'
-  },
-  {
-    id: '28',
-    name: 'Скачать документ',
-    description: 'Скачать электронный документ',
-    category: 'Documents',
-    icon: '⬇️',
-    endpoint: '/api/egov/documents/download',
-    method: 'GET'
-  },
-  {
-    id: '29',
-    name: 'Возобновить документ',
-    description: 'Возобновить действие документа',
-    category: 'Documents',
-    icon: '🔄',
-    endpoint: '/api/egov/documents/renew',
-    method: 'POST'
-  },
-  {
-    id: '30',
-    name: 'Шаблоны документов',
-    description: 'Получить шаблоны документов',
-    category: 'Documents',
-    icon: '📋',
-    endpoint: '/api/egov/documents/templates',
-    method: 'GET'
-  },
-  {
-    id: '31',
-    name: 'Валидация документа',
-    description: 'Проверить корректность документа',
-    category: 'Documents',
-    icon: '🔍',
-    endpoint: '/api/egov/documents/validate',
-    method: 'POST'
-  },
-  {
-    id: '32',
-    name: 'Копия документа',
-    description: 'Создать заверенную копию документа',
-    category: 'Documents',
-    icon: '©️',
-    endpoint: '/api/egov/documents/copy',
-    method: 'POST'
-  },
-  {
-    id: '33',
-    name: 'История документа',
-    description: 'Получить историю изменений документа',
-    category: 'Documents',
-    icon: '📜',
-    endpoint: '/api/egov/documents/history',
-    method: 'GET'
-  },
-  {
-    id: '34',
-    name: 'Подвижные квартиры',
-    description: 'Получить документы для подвижных квартир',
-    category: 'Documents',
-    icon: '🏠',
-    endpoint: '/api/egov/documents/housing',
-    method: 'GET'
-  },
-  {
-    id: '35',
-    name: 'Архив документов',
-    description: 'Получить архивированные документы',
-    category: 'Documents',
-    icon: '🗃️',
-    endpoint: '/api/egov/documents/archive',
-    method: 'GET'
-  },
+  { id: '16', name: 'Подать заявление', description: 'Создать заявление PASSPORT', category: 'Applications', icon: '📝', method: 'POST', endpoint: `/api/egov/applications/submit?service_type=${TEST_SERVICE}&iin=${TEST_IIN}&email=${TEST_EMAIL}`, body: { data: {} } },
+  { id: '17', name: 'Статус заявления', description: 'Проверить статус REF123', category: 'Applications', icon: '📍', method: 'GET', endpoint: `/api/egov/applications/${TEST_REF}/status` },
+  { id: '18', name: 'Детали заявления', description: 'Детали REF123', category: 'Applications', icon: '📑', method: 'GET', endpoint: `/api/egov/applications/${TEST_REF}/details` },
+  { id: '19', name: 'Отмена заявления', description: 'Отменить REF123', category: 'Applications', icon: '🛑', method: 'POST', endpoint: `/api/egov/applications/${TEST_REF}/cancel?reason=test` },
+  { id: '20', name: 'Переотправка', description: 'Переотправить REF123', category: 'Applications', icon: '🔁', method: 'POST', endpoint: `/api/egov/applications/${TEST_REF}/resubmit`, body: { data: {} } },
 
-  // 36-45: Профиль пользователя
-  {
-    id: '36',
-    name: 'Мой профиль',
-    description: 'Получить информацию о профиле',
-    category: 'Profile',
-    icon: '👤',
-    endpoint: '/api/egov/profile',
-    method: 'GET'
-  },
-  {
-    id: '37',
-    name: 'Контакты',
-    description: 'Получить контактную информацию',
-    category: 'Profile',
-    icon: '📞',
-    endpoint: '/api/egov/profile/contacts',
-    method: 'GET'
-  },
-  {
-    id: '38',
-    name: 'Верификация пользователя',
-    description: 'Уровень верификации профиля',
-    category: 'Profile',
-    icon: '✓',
-    endpoint: '/api/egov/profile/verification',
-    method: 'GET'
-  },
-  {
-    id: '39',
-    name: 'Уведомления',
-    description: 'Параметры уведомлений',
-    category: 'Profile',
-    icon: '🔔',
-    endpoint: '/api/egov/profile/notifications',
-    method: 'GET'
-  },
-  {
-    id: '40',
-    name: 'Предпочтения',
-    description: 'Получить предпочтения пользователя',
-    category: 'Profile',
-    icon: '⚙️',
-    endpoint: '/api/egov/profile/preferences',
-    method: 'GET'
-  },
-  {
-    id: '41',
-    name: 'Подписки',
-    description: 'Управление подписками на услуги',
-    category: 'Profile',
-    icon: '📧',
-    endpoint: '/api/egov/profile/subscriptions',
-    method: 'GET'
-  },
-  {
-    id: '42',
-    name: 'Обновить профиль',
-    description: 'Обновить информацию профиля',
-    category: 'Profile',
-    icon: '✏️',
-    endpoint: '/api/egov/profile/update',
-    method: 'PUT'
-  },
-  {
-    id: '43',
-    name: 'Изменить пароль',
-    description: 'Изменить пароль профиля',
-    category: 'Profile',
-    icon: '🔒',
-    endpoint: '/api/egov/profile/password',
-    method: 'POST'
-  },
-  {
-    id: '44',
-    name: 'Двухфакторная аутентификация',
-    description: 'Настройка 2FA',
-    category: 'Profile',
-    icon: '🔐',
-    endpoint: '/api/egov/profile/2fa',
-    method: 'POST'
-  },
-  {
-    id: '45',
-    name: 'Удалить профиль',
-    description: 'Удалить аккаунт (необратимо)',
-    category: 'Profile',
-    icon: '🗑️',
-    endpoint: '/api/egov/profile/delete',
-    method: 'DELETE'
-  },
+  { id: '21', name: 'История заявлений', description: 'История по ИИН', category: 'Applications', icon: '🕘', method: 'GET', endpoint: `/api/egov/applications/history/${TEST_IIN}` },
+  { id: '22', name: 'Шаги заявления', description: 'Этапы REF123', category: 'Applications', icon: '🧭', method: 'GET', endpoint: `/api/egov/applications/${TEST_REF}/steps` },
+  { id: '23', name: 'Загрузить док.', description: 'Загрузка пути документа', category: 'Applications', icon: '📤', method: 'POST', endpoint: `/api/egov/applications/${TEST_REF}/upload?file_path=/tmp/doc.pdf&doc_type=passport` },
+  { id: '24', name: 'Poll статуса', description: 'Опрос статуса REF123', category: 'Applications', icon: '🔄', method: 'POST', endpoint: `/api/egov/applications/${TEST_REF}/poll?interval=1&max_attempts=1` },
+  { id: '25', name: 'Batch check', description: 'Пакетная проверка', category: 'Applications', icon: '📦', method: 'POST', endpoint: '/api/egov/applications/batch-check', body: ['REF1', 'REF2'] },
 
-  // 46-50: Платежи и аналитика
-  {
-    id: '46',
-    name: 'История платежей',
-    description: 'Информация о платежах',
-    category: 'Payments',
-    icon: '💳',
-    endpoint: '/api/egov/payments/history',
-    method: 'GET'
-  },
-  {
-    id: '47',
-    name: 'Инициировать платеж',
-    description: 'Начать процесс платежа',
-    category: 'Payments',
-    icon: '💵',
-    endpoint: '/api/egov/payments/initiate',
-    method: 'POST'
-  },
-  {
-    id: '48',
-    name: 'Аналитика использования',
-    description: 'Статистика использования услуг',
-    category: 'Analytics',
-    icon: '📈',
-    endpoint: '/api/egov/analytics/usage',
-    method: 'GET'
-  },
-  {
-    id: '49',
-    name: 'Нагрузка системы',
-    description: 'Текущая нагрузка eGov системы',
-    category: 'Analytics',
-    icon: '⚡',
-    endpoint: '/api/egov/analytics/load',
-    method: 'GET'
-  },
-  {
-    id: '50',
-    name: 'Отчет',
-    description: 'Получить отчет по использованию',
-    category: 'Analytics',
-    icon: '📊',
-    endpoint: '/api/egov/analytics/report',
-    method: 'GET'
-  }
+  { id: '26', name: 'Мои документы', description: 'Документы по ИИН', category: 'Documents', icon: '🪪', method: 'GET', endpoint: `/api/egov/documents/${TEST_IIN}` },
+  { id: '27', name: 'Инфо документа', description: 'Информация DOC123', category: 'Documents', icon: 'ℹ️', method: 'GET', endpoint: `/api/egov/documents/${TEST_DOC}/info?iin=${TEST_IIN}` },
+  { id: '28', name: 'Проверка документа', description: 'Верификация DOC123', category: 'Documents', icon: '🛡️', method: 'GET', endpoint: `/api/egov/documents/${TEST_DOC}/verify?iin=${TEST_IIN}` },
+  { id: '29', name: 'Скачать документ', description: 'Скачать DOC123', category: 'Documents', icon: '⬇️', method: 'GET', endpoint: `/api/egov/documents/${TEST_DOC}/download?iin=${TEST_IIN}` },
+  { id: '30', name: 'Статус документа', description: 'Статус DOC123', category: 'Documents', icon: '🚦', method: 'GET', endpoint: `/api/egov/documents/${TEST_DOC}/status` },
+
+  { id: '31', name: 'Продлить документ', description: 'Продление DOC123', category: 'Documents', icon: '🗓️', method: 'POST', endpoint: `/api/egov/documents/${TEST_DOC}/renew?iin=${TEST_IIN}` },
+  { id: '32', name: 'Шаблон документа', description: 'Шаблон passport', category: 'Documents', icon: '📋', method: 'GET', endpoint: '/api/egov/documents/template/passport' },
+  { id: '33', name: 'Валидация документа', description: 'Проверка данных документа', category: 'Documents', icon: '🧪', method: 'POST', endpoint: '/api/egov/documents/validate?doc_type=passport', body: { iin: TEST_IIN } },
+  { id: '34', name: 'Запрос копии', description: 'Копия DOC123', category: 'Documents', icon: '🖨️', method: 'POST', endpoint: `/api/egov/documents/${TEST_DOC}/copy?iin=${TEST_IIN}&delivery_method=email` },
+  { id: '35', name: 'История документа', description: 'История изменений DOC123', category: 'Documents', icon: '📜', method: 'GET', endpoint: `/api/egov/documents/${TEST_DOC}/history` },
+
+  { id: '36', name: 'Профиль по ИИН', description: 'Профиль пользователя', category: 'Profile', icon: '👤', method: 'GET', endpoint: `/api/egov/user/${TEST_IIN}/profile` },
+  { id: '37', name: 'Обновить контакт', description: 'Обновить email пользователя', category: 'Profile', icon: '📧', method: 'POST', endpoint: `/api/egov/user/${TEST_IIN}/contact?contact_type=email&value=${TEST_EMAIL}` },
+  { id: '38', name: 'Верификация телефона', description: 'Проверить номер и OTP', category: 'Profile', icon: '📱', method: 'POST', endpoint: `/api/egov/user/${TEST_IIN}/verify-phone?phone=%2B77770000000&otp=123456` },
+  { id: '39', name: 'Верификация email', description: 'Проверить email токеном', category: 'Profile', icon: '✉️', method: 'POST', endpoint: `/api/egov/user/${TEST_IIN}/verify-email?email=${TEST_EMAIL}&token=token123` },
+  { id: '40', name: 'Уведомления', description: 'Уведомления пользователя', category: 'Profile', icon: '🔔', method: 'GET', endpoint: `/api/egov/user/${TEST_IIN}/notifications` },
+
+  { id: '41', name: 'Прочитать уведомление', description: 'Метка read для уведомления', category: 'Profile', icon: '✅', method: 'POST', endpoint: `/api/egov/user/${TEST_IIN}/notifications/N1/read` },
+  { id: '42', name: 'Предпочтения', description: 'Текущие настройки пользователя', category: 'Profile', icon: '⚙️', method: 'GET', endpoint: `/api/egov/user/${TEST_IIN}/preferences` },
+  { id: '43', name: 'Обновить настройки', description: 'Обновить preferences', category: 'Profile', icon: '🛠️', method: 'POST', endpoint: `/api/egov/user/${TEST_IIN}/preferences`, body: { language: 'ru' } },
+  { id: '44', name: 'Подписки', description: 'Список подписок', category: 'Profile', icon: '🧾', method: 'GET', endpoint: `/api/egov/user/${TEST_IIN}/subscriptions` },
+  { id: '45', name: 'Подписаться', description: 'Подписка на PASSPORT', category: 'Profile', icon: '➕', method: 'POST', endpoint: `/api/egov/user/${TEST_IIN}/subscriptions?service_id=${TEST_SERVICE}` },
+
+  { id: '46', name: 'Платежная инфо', description: 'Информация по APP123', category: 'Payments', icon: '💰', method: 'GET', endpoint: `/api/egov/payments/${TEST_APP}` },
+  { id: '47', name: 'Инициировать платеж', description: 'Начать платеж APP123', category: 'Payments', icon: '💸', method: 'POST', endpoint: `/api/egov/payments/initiate?application_id=${TEST_APP}&amount=10000&currency=KZT` },
+  { id: '48', name: 'Аналитика', description: 'Сводная аналитика', category: 'Analytics', icon: '📈', method: 'GET', endpoint: '/api/egov/analytics' },
+  { id: '49', name: 'Нагрузка системы', description: 'Текущая нагрузка', category: 'Analytics', icon: '📶', method: 'GET', endpoint: '/api/egov/system/load' },
+  { id: '50', name: 'Сообщить о проблеме', description: 'Репорт в поддержку', category: 'Support', icon: '🆘', method: 'POST', endpoint: '/api/egov/support/report?issue_title=Test&issue_description=Auto%20report&severity=normal' },
 ];
 
 const EgovFunctions: React.FC = () => {
-  const [functions, setFunctions] = useState<EgovFunction[]>(EGOV_FUNCTIONS);
-  const [filteredFunctions, setFilteredFunctions] = useState<EgovFunction[]>(EGOV_FUNCTIONS);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<Record<string, FunctionResult>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Извлечь уникальные категории
-  const categories = Array.from(new Set(functions.map(f => f.category)));
+  const categories = useMemo(
+    () => Array.from(new Set(EGOV_FUNCTIONS.map((f) => f.category))),
+    []
+  );
 
-  // Фильтровать функции по поисковому запросу и категории
-  useEffect(() => {
-    let filtered = functions;
+  const filteredFunctions = useMemo(() => {
+    return EGOV_FUNCTIONS.filter((f) => {
+      const matchesCategory = selectedCategory ? f.category === selectedCategory : true;
+      const text = `${f.name} ${f.description} ${f.endpoint}`.toLowerCase();
+      const matchesSearch = text.includes(searchTerm.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [searchTerm, selectedCategory]);
 
-    if (searchTerm) {
-      filtered = filtered.filter(f => 
-        f.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        f.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        f.endpoint.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (selectedCategory) {
-      filtered = filtered.filter(f => f.category === selectedCategory);
-    }
-
-    setFilteredFunctions(filtered);
-  }, [searchTerm, selectedCategory, functions]);
-
-  // Выполнить функцию
   const executeFunction = async (func: EgovFunction) => {
-    setLoading(true);
-    try {
-      const response = await fetch(func.endpoint, {
-        method: func.method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        }
-      });
+    const startedAt = performance.now();
+    setResults((prev) => ({
+      ...prev,
+      [func.id]: { status: 'loading' },
+    }));
 
-      const data = await response.json();
-      console.log(`${func.name} результат:`, data);
-      
-      // Можно добавить toast уведомление
-      alert(`✅ ${func.name} выполнена успешно!\n\nОтвет: ${JSON.stringify(data, null, 2)}`);
+    try {
+      let response: unknown;
+      if (func.method === 'GET') {
+        response = await apiClient.get(func.endpoint);
+      } else if (func.method === 'POST') {
+        response = await apiClient.post(func.endpoint, func.body);
+      } else if (func.method === 'PUT') {
+        response = await apiClient.put(func.endpoint, func.body);
+      } else {
+        response = await apiClient.delete(func.endpoint);
+      }
+
+      const endedAt = performance.now();
+      setResults((prev) => ({
+        ...prev,
+        [func.id]: {
+          status: 'success',
+          response,
+          durationMs: Math.round(endedAt - startedAt),
+          ranAt: new Date().toISOString(),
+        },
+      }));
     } catch (error) {
-      console.error(`Ошибка при выполнении ${func.name}:`, error);
-      alert(`❌ Ошибка при выполнении: ${error}`);
-    } finally {
-      setLoading(false);
+      const endedAt = performance.now();
+      setResults((prev) => ({
+        ...prev,
+        [func.id]: {
+          status: 'error',
+          error: formatApiError(error),
+          durationMs: Math.round(endedAt - startedAt),
+          ranAt: new Date().toISOString(),
+        },
+      }));
     }
   };
 
+  useEffect(() => {
+    const autoFunctions = EGOV_FUNCTIONS.filter((f) => f.autoRun);
+    if (autoFunctions.length === 0) {
+      return;
+    }
+
+    const runAutoDiagnostics = async () => {
+      for (const f of autoFunctions) {
+        // Run sequentially to avoid noisy startup bursts.
+        // eslint-disable-next-line no-await-in-loop
+        await executeFunction(f);
+      }
+    };
+
+    runAutoDiagnostics();
+  }, []);
+
+  const copyResult = async (id: string) => {
+    const result = results[id];
+    if (!result) {
+      return;
+    }
+    const text = result.status === 'success'
+      ? JSON.stringify(result.response, null, 2)
+      : result.error || '';
+
+    if (!text) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(text);
+  };
+
+  const successCount = Object.values(results).filter((r) => r.status === 'success').length;
+  const errorCount = Object.values(results).filter((r) => r.status === 'error').length;
+  const runningCount = Object.values(results).filter((r) => r.status === 'loading').length;
+
   return (
     <div className="egov-functions-container">
-      <div className="egov-header">
-        <h1>🏛️ eGov Функции (50+)</h1>
-        <p className="egov-subtitle">Полный список всех доступных государственных услуг и функций</p>
-      </div>
+      <section className="hero-panel">
+        <div>
+          <h1>eGov Operations Center</h1>
+          <p>
+            При открытии страницы автоматически запускаются базовые проверки API.
+            Остальные функции доступны в один клик.
+          </p>
+        </div>
+        <div className="hero-metrics">
+          <div className="metric-card">
+            <span className="metric-label">Success</span>
+            <strong>{successCount}</strong>
+          </div>
+          <div className="metric-card">
+            <span className="metric-label">Errors</span>
+            <strong>{errorCount}</strong>
+          </div>
+          <div className="metric-card">
+            <span className="metric-label">Running</span>
+            <strong>{runningCount}</strong>
+          </div>
+        </div>
+      </section>
 
-      {/* Поиск */}
-      <div className="egov-search-section">
+      <section className="toolbar-panel">
         <Input
           type="text"
-          placeholder="🔎 Поиск функции (название, описание, endpoint)..."
+          placeholder="Поиск по названию, описанию или endpoint..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="egov-search-input"
         />
-      </div>
-
-      {/* Фильтры по категориям */}
-      <div className="egov-categories">
-        <button
-          className={`category-btn ${selectedCategory === null ? 'active' : ''}`}
-          onClick={() => setSelectedCategory(null)}
-        >
-          Все ({functions.length})
-        </button>
-        {categories.map(category => (
+        <div className="egov-categories">
           <button
-            key={category}
-            className={`category-btn ${selectedCategory === category ? 'active' : ''}`}
-            onClick={() => setSelectedCategory(category)}
+            className={`category-btn ${selectedCategory === null ? 'active' : ''}`}
+            onClick={() => setSelectedCategory(null)}
           >
-            {category} ({functions.filter(f => f.category === category).length})
+            Все ({EGOV_FUNCTIONS.length})
           </button>
-        ))}
-      </div>
+          {categories.map((category) => (
+            <button
+              key={category}
+              className={`category-btn ${selectedCategory === category ? 'active' : ''}`}
+              onClick={() => setSelectedCategory(category)}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+      </section>
 
-      {/* Результаты поиска */}
-      <div className="egov-stats">
-        <p>Найдено {filteredFunctions.length} функций из {functions.length}</p>
-      </div>
+      <section className="egov-grid">
+        {filteredFunctions.map((func) => {
+          const result = results[func.id] ?? { status: 'idle' as const };
+          const isExpanded = expandedId === func.id;
 
-      {/* Сетка функций */}
-      <div className="egov-grid">
-        {filteredFunctions.map((func) => (
-          <Card key={func.id} className="egov-function-card">
-            <div className="card-header">
-              <span className="icon">{func.icon}</span>
-              <span className="method-badge">{func.method}</span>
-            </div>
-            
-            <h3>{func.name}</h3>
-            <p className="description">{func.description}</p>
-            
-            <div className="endpoint">
-              <code>{func.endpoint}</code>
-            </div>
-            
-            <div className="card-footer">
-              <span className="category-tag">{func.category}</span>
-              <button
-                className="execute-btn"
-                onClick={() => executeFunction(func)}
-                disabled={loading}
-              >
-                {loading ? '⏳' : '▶️'} Test
-              </button>
-            </div>
-          </Card>
-        ))}
-      </div>
+          return (
+            <Card key={func.id} className={`egov-function-card ${isExpanded ? 'expanded' : ''}`}>
+              <div className="card-header">
+                <span className="icon">{func.icon}</span>
+                <span className="method-badge">{func.method}</span>
+              </div>
+
+              <h3>{func.name}</h3>
+              <p className="description">{func.description}</p>
+
+              <div className="endpoint">
+                <code>{func.endpoint}</code>
+              </div>
+
+              <div className="card-footer">
+                <span className="category-tag">{func.category}</span>
+                <button
+                  className="execute-btn"
+                  onClick={() => executeFunction(func)}
+                  disabled={result.status === 'loading'}
+                >
+                  <PlayCircle size={16} />
+                  {result.status === 'loading' ? 'Выполнение...' : 'Выполнить'}
+                </button>
+              </div>
+
+              {result.status !== 'idle' && (
+                <div className="result-panel">
+                  <div className="result-title-row">
+                    {result.status === 'success' && <CheckCircle2 size={16} className="ok" />}
+                    {result.status === 'error' && <AlertCircle size={16} className="err" />}
+                    {result.status === 'loading' && <Clock3 size={16} className="run" />}
+                    <span className="result-title">
+                      {result.status === 'success' && 'Успешно'}
+                      {result.status === 'error' && 'Ошибка'}
+                      {result.status === 'loading' && 'В процессе'}
+                    </span>
+                    {result.durationMs !== undefined && <span className="latency">{result.durationMs} ms</span>}
+                  </div>
+
+                  {result.status === 'error' && (
+                    <p className="result-error">{result.error}</p>
+                  )}
+
+                  {result.status === 'success' && (
+                    <>
+                      {isExpanded ? (
+                        <pre className="result-json">{JSON.stringify(result.response, null, 2)}</pre>
+                      ) : (
+                        <pre className="result-json short">{JSON.stringify(result.response, null, 2)}</pre>
+                      )}
+                      <div className="result-actions">
+                        <button className="sub-btn" onClick={() => setExpandedId(isExpanded ? null : func.id)}>
+                          <Sparkles size={14} />
+                          {isExpanded ? 'Свернуть' : 'Развернуть'}
+                        </button>
+                        <button className="sub-btn" onClick={() => copyResult(func.id)}>
+                          <Copy size={14} />
+                          Копировать
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </section>
 
       {filteredFunctions.length === 0 && (
         <div className="no-results">
-          <p>😞 Функции не найдены</p>
-          <p>Пожалуйста, попробуйте другой поисковый запрос или категорию</p>
+          <p>Ничего не найдено по текущему фильтру.</p>
         </div>
       )}
     </div>

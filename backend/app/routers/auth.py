@@ -89,23 +89,23 @@ async def register_user(req: RegisterRequest):
 async def otp_send(body: OtpSendRequest):
     try:
         normalized_email = body.email.strip().lower()
-        print(f"\n📧 OTP Send Request for: {normalized_email}")
+        print(f"\nINFO OTP Send Request for: {normalized_email}")
         db = get_db()
         found = db.table("users").select("id,email,full_name").eq("email", normalized_email).execute()
         if not found.data:
-            print(f"   ❌ User not found")
+            print("   ERROR User not found")
             raise HTTPException(404, "Пользователь с таким email не найден. Сначала зарегистрируйтесь.")
 
-        print(f"   ✓ User found: {found.data[0].get('full_name', 'Unknown')}")
+        print(f"   OK User found: {found.data[0].get('full_name', 'Unknown')}")
         
         code = generate_code()
-        print(f"   ✓ Generated code: {code}")
+        print(f"   OK Generated code: {code}")
         
         save_code(normalized_email, code)
-        print(f"   ✓ Code saved to storage")
+        print("   OK Code saved to storage")
         
         # Try to send via SendGrid
-        print(f"   📤 Sending email via SendGrid...")
+        print("   INFO Sending email via SendGrid...")
         ok = NotificationService.send_email(
             normalized_email,
             "SuperGov — код входа",
@@ -113,20 +113,20 @@ async def otp_send(body: OtpSendRequest):
         )
         
         if not ok:
-            print(f"   ❌ SendGrid send failed")
+            print("   ERROR SendGrid send failed")
             raise HTTPException(
                 503,
                 "Ошибка отправки кода через SendGrid. Проверьте: 1) API ключ в .env, 2) Email верифицирован в SendGrid, 3) Логи сервера для деталей"
             )
         
-        print(f"   ✓ OTP sent successfully")
+        print("   OK OTP sent successfully")
         return {"success": True, "data": {"message": "Код отправлен на email"}}
     
     except HTTPException:
         raise
     except Exception as e:
         import traceback
-        print(f"   ❌ OTP Send Error: {type(e).__name__}: {e}")
+        print(f"   ERROR OTP Send: {type(e).__name__}: {e}")
         traceback.print_exc()
         raise HTTPException(500, f"Ошибка сервера при отправке OTP: {type(e).__name__}")
 

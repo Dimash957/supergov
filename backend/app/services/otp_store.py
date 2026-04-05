@@ -21,7 +21,7 @@ def save_code(email: str, code: str, ttl_sec: int = 600) -> None:
         else:
             raise Exception("Redis client is None")
     except Exception as e:
-        print(f"⚠ OTP Storage: Using in-memory fallback (Redis error: {type(e).__name__})")
+        print(f"WARN OTP Storage: Using in-memory fallback (Redis error: {type(e).__name__})")
         _MEMORY[email.lower().strip()] = (code, time.time() + ttl_sec)
 
 

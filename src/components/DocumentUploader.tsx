@@ -3,8 +3,9 @@
  */
 
 import React, { useState } from 'react';
-import { Upload, FileText, Loader, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, FileText, Loader, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { Card } from './ui/Card';
+import { apiClient, formatApiError } from '../lib/apiClient';
 import '../styles/DocumentUploader.css';
 
 interface UploadedFile {
@@ -15,14 +16,38 @@ interface UploadedFile {
   extractedData?: Record<string, any>;
   filledForm?: Record<string, any>;
   error?: string;
+  serverFileId?: string;
+}
+
+interface Notification {
+  id: string;
+  type: 'success' | 'error' | 'info';
+  message: string;
 }
 
 const DocumentUploader: React.FC = () => {
   const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedDocType, setSelectedDocType] = useState('passport');
   const [selectedService, setSelectedService] = useState('PASSPORT');
+
+  const unwrapPayload = (apiResponse: any) => {
+    if (apiResponse && typeof apiResponse === 'object' && apiResponse.data && typeof apiResponse.data === 'object') {
+      return apiResponse.data;
+    }
+    return apiResponse;
+  };
+
+  // Добавить уведомление
+  const addNotification = (type: 'success' | 'error' | 'info', message: string) => {
+    const id = Date.now().toString();
+    setNotifications((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    }, 5000);
+  };
 
   const docTypes = [
     { value: 'passport', label: '🛂 Паспорт' },
@@ -87,16 +112,9 @@ const DocumentUploader: React.FC = () => {
         formData.append('file', file);
         formData.append('doc_type', selectedDocType);
 
-        // Загрузить и извлечь данные
-        const response = await fetch('/api/documents/extract-ai', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-          },
-          body: formData,
-        });
-
-        const data = await response.json();
+        // Загрузить и извлечь данные через улучшенный API client
+        const data = await apiClient.postFormData<any>('/api/documents/extract-ai', formData);
+        const payload = unwrapPayload(data);
 
         if (data.success) {
           setFiles((prev) =>
@@ -105,26 +123,30 @@ const DocumentUploader: React.FC = () => {
                 ? {
                     ...f,
                     status: 'extracted',
-                    extractedData: data.extracted_data,
+                    extractedData: payload.extracted_data ?? data.extracted_data,
+                    serverFileId: payload.file_id ?? data.file_id,
                   }
                 : f
             )
           );
+          addNotification('success', `✅ ${file.name}: данные извлечены успешно`);
         } else {
-          throw new Error(data.detail || 'Ошибка при извлечении данных');
+          throw new Error(data.message || 'Ошибка при извлечении данных');
         }
       } catch (error) {
+        const errorMessage = formatApiError(error);
         setFiles((prev) =>
           prev.map((f) =>
             f.id === fileId
               ? {
                   ...f,
                   status: 'error',
-                  error: error instanceof Error ? error.message : 'Неизвестная ошибка',
+                  error: errorMessage,
                 }
               : f
           )
         );
+        addNotification('error', `❌ ${file.name}: ${errorMessage}`);
       }
     });
 
@@ -134,17 +156,13 @@ const DocumentUploader: React.FC = () => {
   // Заполнить форму
   const fillForm = async (fileId: string) => {
     const file = files.find((f) => f.id === fileId);
-    if (!file) return;
+    if (!file || !file.serverFileId) return;
 
     try {
-      const response = await fetch(`/api/documents/${fileId}/fill-form?service_type=${selectedService}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-      });
-
-      const data = await response.json();
+      const data = await apiClient.post<any>(
+        `/api/documents/${file.serverFileId}/fill-form?service_type=${selectedService}`
+      );
+      const payload = unwrapPayload(data);
 
       if (data.success) {
         setFiles((prev) =>
@@ -153,44 +171,73 @@ const DocumentUploader: React.FC = () => {
               ? {
                   ...f,
                   status: 'filled',
-                  filledForm: data.form,
+                  filledForm: payload.form ?? data.form,
                 }
               : f
           )
         );
+        addNotification('success', `✅ Форма заполнена для ${file.name}`);
       } else {
-        throw new Error(data.detail || 'Ошибка при заполнении формы');
+        throw new Error(data.message || 'Ошибка при заполнении формы');
       }
     } catch (error) {
-      alert(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+      const errorMessage = formatApiError(error);
+      addNotification('error', `❌ Ошибка при заполнении: ${errorMessage}`);
     }
   };
 
   // Отправить форму
   const submitForm = async (fileId: string) => {
-    try {
-      const response = await fetch(`/api/documents/${fileId}/submit-form`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        },
-      });
+    const file = files.find((f) => f.id === fileId);
+    if (!file || !file.serverFileId) return;
 
-      const data = await response.json();
+    try {
+      const data = await apiClient.post<any>(
+        `/api/documents/${file.serverFileId}/submit-form`
+      );
+      const payload = unwrapPayload(data);
 
       if (data.success) {
-        alert(`✅ Заявка успешно отправлена!\nНомер заявления: ${data.application_number}`);
-        // Можно перенаправить на страницу трекинга
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === fileId ? { ...f, status: 'filled' } : f
+          )
+        );
+        addNotification('success', `✅ Заявка успешно отправлена! Номер: ${payload.application_number ?? data.application_number}`);
       } else {
-        throw new Error(data.detail || 'Ошибка при отправке');
+        throw new Error(data.message || 'Ошибка при отправке');
       }
     } catch (error) {
-      alert(`Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+      const errorMessage = formatApiError(error);
+      addNotification('error', `❌ Ошибка при отправке: ${errorMessage}`);
     }
   };
 
   return (
     <div className="document-uploader">
+      {/* Notifications Panel */}
+      {notifications.length > 0 && (
+        <div className="notifications-panel">
+          {notifications.map((notif) => (
+            <div
+              key={notif.id}
+              className={`notification notification-${notif.type}`}
+            >
+              <span>{notif.message}</span>
+              <button
+                onClick={() =>
+                  setNotifications((prev) =>
+                    prev.filter((n) => n.id !== notif.id)
+                  )
+                }
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="uploader-container">
         <h2 className="uploader-title">📎 Загрузить документы для заполнения формы ЦОН</h2>
         <p className="uploader-subtitle">

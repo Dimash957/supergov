@@ -26,10 +26,10 @@ class RedisClient:
             r = redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=2)
             r.ping()
             self._redis = r
-            print("✓ Redis подключен успешно")
+            print("OK: Redis подключен успешно")
         except Exception as e:
             print(
-                f"⚠ Redis недоступен ({type(e).__name__}). "
+                f"WARN: Redis недоступен ({type(e).__name__}). "
                 "Используется память процесса; установите Redis для продакшена."
             )
 

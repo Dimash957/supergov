@@ -78,10 +78,10 @@ def _user_from_supergov_token(token: str) -> Optional[dict]:
 
 
 async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Security(security)):
-    logger.info("🔐=== get_current_user() CALLED ===")
+    logger.info("AUTH get_current_user CALLED")
     
     if not STACK_AUTH_JWKS_URL:
-        logger.info("⚠️  STACK_AUTH_JWKS_URL not set, returning MOCK user")
+        logger.info("WARN STACK_AUTH_JWKS_URL not set, returning MOCK user")
         return {
             "id": "mock-user-id",
             "stack_user_id": "mock-stack",
@@ -92,19 +92,19 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
         }
 
     if not credentials:
-        logger.error("❌ Missing authorization header")
+        logger.error("ERROR Missing authorization header")
         raise HTTPException(status_code=401, detail="Missing authorization header")
 
     token = credentials.credentials
-    logger.debug(f"📌 Token received, first 50 chars: {token[:50]}...")
+    logger.debug(f"Token received, first 50 chars: {token[:50]}...")
 
     otp_user = _user_from_supergov_token(token)
     if otp_user:
-        logger.info(f"✅ OTP token verified for user: {otp_user.get('email')}")
+        logger.info(f"OK OTP token verified for user: {otp_user.get('email')}")
         return otp_user
 
     alg = _token_alg(token)
-    logger.debug(f"🔍 Token algorithm: {alg}")
+    logger.debug(f"Token algorithm: {alg}")
     # Токен входа по коду (HS256) не совместим с проверкой Stack — иначе «Unable to parse»
     if alg == "HS256":
         raise HTTPException(
@@ -206,27 +206,27 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
                     detail=f"Токен Stack: проверка audience/issuer не прошла ({je_aud!s}). Проверьте STACK_PROJECT_ID в .env.",
                 ) from je_aud
         stack_user_id = payload.get("sub")
-        logger.info(f"🔑 Stack user_id from token: {stack_user_id}")
+        logger.info(f"Stack user_id from token: {stack_user_id}")
         logger.debug(f"   Payload fields: {list(payload.keys())}")
         logger.debug(f"   Email: {payload.get('primary_email') or payload.get('email')}")
         logger.debug(f"   Name: {payload.get('display_name')}")
         
         db = get_db()
-        logger.debug("📊 Querying database for existing user...")
+        logger.debug("Querying database for existing user...")
         user_res = db.table("users").select("*").eq("stack_user_id", stack_user_id).execute()
         
         if user_res.data:
-            logger.info(f"✅ Found existing user: {stack_user_id} (DB ID: {user_res.data[0].get('id')})")
+            logger.info(f"OK Found existing user: {stack_user_id} (DB ID: {user_res.data[0].get('id')})")
             return user_res.data[0]
         
         # NEW USER - AUTO-CREATE PROFILE
-        logger.info(f"👤 New user detected: {stack_user_id}. Creating profile...")
+        logger.info(f"New user detected: {stack_user_id}. Creating profile...")
         try:
             email = payload.get("primary_email") or payload.get("email") or f"{stack_user_id}@supergov.kz"
             full_name = payload.get("display_name") or stack_user_id
             
-            logger.debug(f"   📧 Email: {email}")
-            logger.debug(f"   👌 Full name: {full_name}")
+            logger.debug(f"   Email: {email}")
+            logger.debug(f"   Full name: {full_name}")
             
             new_user_data = {
                 "stack_user_id": stack_user_id,
@@ -236,7 +236,7 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
                 "iin": "",
             }
             
-            logger.info(f"📝 Inserting user to database...")
+            logger.info("Inserting user to database...")
             logger.debug(f"   Data: {new_user_data}")
             
             insert_res = db.table("users").insert(new_user_data).execute()
@@ -245,41 +245,42 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
             
             if insert_res.data:
                 user_id = insert_res.data[0].get('id')
-                logger.info(f"✅ User created successfully (DB ID: {user_id})")
+                logger.info(f"OK User created successfully (DB ID: {user_id})")
                 logger.info(f"   Email: {insert_res.data[0].get('email')}")
                 logger.info(f"   Name: {insert_res.data[0].get('full_name')}")
                 return insert_res.data[0]
             else:
-                logger.warning(f"⚠️  Insert returned empty response, retrying query...")
+                logger.warning("WARN Insert returned empty response, retrying query...")
                 # Retry if insert succeeded but returned empty
                 retry_res = db.table("users").select("*").eq("stack_user_id", stack_user_id).execute()
                 if retry_res.data:
-                    logger.info(f"✅ Found created user on retry (DB ID: {retry_res.data[0].get('id')})")
+                    logger.info(f"OK Found created user on retry (DB ID: {retry_res.data[0].get('id')})")
                     return retry_res.data[0]
                 else:
-                    logger.error(f"❌ Retry query also returned empty")
+                    logger.error("ERROR Retry query also returned empty")
         except Exception as e:
-            logger.error(f"❌ Failed to create user: {type(e).__name__}")
+            logger.error(f"ERROR Failed to create user: {type(e).__name__}")
             logger.error(f"   Error: {str(e)}")
             logger.exception(e)
         
-        logger.error(f"❌ Could not create profile for {stack_user_id}")
+        logger.error(f"ERROR Could not create profile for {stack_user_id}")
         raise HTTPException(
             status_code=404,
             detail="Профиль не найден. Пожалуйста, обновите страницу или попробуйте позже.",
         )
 
+    except HTTPException:
+        raise
     except JWTError as je:
-        logger.error(f"❌ JWT validation failed: {type(je).__name__}")
+        logger.error(f"ERROR JWT validation failed: {type(je).__name__}")
         logger.error(f"   Details: {str(je)}")
         raise HTTPException(
             status_code=401,
             detail=f"Токен Stack недействителен или устарел: {je!s}. Выйдите и войдите снова.",
         ) from je
-    
-    finally:
-        logger.info("🔐=== get_current_user() FINISHED ===")
-    except HTTPException:
-        raise
     except Exception as e:
+        logger.error(f"ERROR Unexpected auth error: {type(e).__name__}")
+        logger.error(f"   Details: {str(e)}")
         raise HTTPException(status_code=401, detail=str(e)) from e
+    finally:
+        logger.info("AUTH get_current_user FINISHED")

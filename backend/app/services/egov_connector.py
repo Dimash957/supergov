@@ -84,7 +84,7 @@ class EGovConnector:
         self._last_error = None
         
         if not self.api_key:
-            logger.warning("EGOV_API_KEY не установлен - eGov функции отключены")
+            logger.warning("EGOV_API_KEY is not set - eGov functions are disabled")
         else:
             logger.info(f"EGovConnector инициализирован с URL: {self.base_url}")
     

@@ -4,17 +4,37 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Optional, List
+from typing import List, Dict, Any
 from datetime import datetime
 import logging
 
 from ..auth import get_current_user
-from ..database import get_database
+from ..database import get_db
 from ..services.egov_connector_extended import egov_connector
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/egov", tags=["eGov Integration"])
 
+# Standard response wrapper
+def success_response(data: Any = None, message: str = "Success", **kwargs) -> Dict:
+    """Standard success response format"""
+    return {
+        "success": True,
+        "message": message,
+        "data": data,
+        "timestamp": datetime.now().isoformat(),
+        **kwargs
+    }
+
+def error_response(message: str, detail: str = None, **kwargs) -> Dict:
+    """Standard error response format"""
+    return {
+        "success": False,
+        "message": message,
+        "detail": detail,
+        "timestamp": datetime.now().isoformat(),
+        **kwargs
+    }
 
 # ============================================================================
 # СТАТУС И КОНФИГУРАЦИЯ
@@ -23,40 +43,70 @@ router = APIRouter(prefix="/api/egov", tags=["eGov Integration"])
 @router.get("/health")
 async def egov_health() -> dict:
     """1. Проверить доступность eGov API"""
-    is_online = await egov_connector.healthcheck()
-    return {
-        "status": "online" if is_online else "offline",
-        "timestamp": datetime.now().isoformat(),
-        "api_url": egov_connector.base_url
-    }
+    try:
+        is_online = await egov_connector.healthcheck()
+        return success_response(
+            data={"status": "online" if is_online else "offline"},
+            message="Health check completed"
+        )
+    except Exception as e:
+        logger.error(f"Health check error: {str(e)}")
+        raise HTTPException(500, detail=str(e))
 
 
 @router.get("/version")
 async def egov_version() -> dict:
     """2. Получить версию API"""
-    version = await egov_connector.get_api_version()
-    return {"version": version or "unknown"}
+    try:
+        version = await egov_connector.get_api_version()
+        return success_response(
+            data={"version": version or "unknown"},
+            message="Version retrieved"
+        )
+    except Exception as e:
+        logger.error(f"Version error: {str(e)}")
+        raise HTTPException(500, detail=str(e))
 
 
 @router.get("/status")
 async def egov_status() -> dict:
     """3. Полный статус API"""
-    status = await egov_connector.get_status()
-    return status
+    try:
+        status = await egov_connector.get_status()
+        return success_response(
+            data=status,
+            message="Status retrieved"
+        )
+    except Exception as e:
+        logger.error(f"Status error: {str(e)}")
+        raise HTTPException(500, detail=str(e))
 
 
 @router.get("/stats")
 async def egov_stats() -> dict:
     """4. Статистика использования"""
-    stats = egov_connector.get_stats()
-    return stats
+    try:
+        stats = egov_connector.get_stats()
+        return success_response(
+            data=stats,
+            message="Stats retrieved"
+        )
+    except Exception as e:
+        logger.error(f"Stats error: {str(e)}")
+        raise HTTPException(500, detail=str(e))
 
 
 @router.post("/cache/reset")
 async def reset_cache() -> dict:
     """5. Очистить кэш"""
-    await egov_connector.reset_cache()
-    return {"message": "Cache cleared"}
+    try:
+        await egov_connector.reset_cache()
+        return success_response(
+            message="Cache cleared successfully"
+        )
+    except Exception as e:
+        logger.error(f"Cache reset error: {str(e)}")
+        raise HTTPException(500, detail=str(e))
 
 
 # ============================================================================
@@ -66,15 +116,78 @@ async def reset_cache() -> dict:
 @router.get("/services")
 async def get_services(force_refresh: bool = False) -> dict:
     """6. Получить список услуг"""
-    services = await egov_connector.get_services(force_refresh=force_refresh)
-    return {"services": services, "count": len(services)}
+    try:
+        services = await egov_connector.get_services(force_refresh=force_refresh)
+        return success_response(
+            data={"services": services or [], "count": len(services or [])},
+            message="Services list retrieved"
+        )
+    except Exception as e:
+        logger.error(f"Services error: {str(e)}")
+        raise HTTPException(500, detail=str(e))
 
 
 @router.get("/services/search")
 async def search_services(query: str = Query(..., min_length=1)) -> dict:
     """8. Поиск услуг"""
-    results = await egov_connector.search_services(query)
-    return {"results": results, "count": len(results)}
+    try:
+        results = await egov_connector.search_services(query)
+        return success_response(
+            data={"results": results or [], "count": len(results or [])},
+            message="Search completed"
+        )
+    except Exception as e:
+        logger.error(f"Search error: {str(e)}")
+        raise HTTPException(500, detail=str(e))
+
+
+@router.get("/me")
+async def get_profile(user: dict = Depends(get_current_user)) -> dict:
+    """Получить профиль текущего пользователя"""
+    try:
+        # Return authenticated user info
+        return success_response(
+            data={
+                "id": user.get("id"),
+                "email": user.get("email"),
+                "name": user.get("name", ""),
+                "iin": user.get("iin", ""),
+            },
+            message="Profile retrieved"
+        )
+    except Exception as e:
+        logger.error(f"Profile error: {str(e)}")
+        raise HTTPException(500, detail=str(e))
+
+
+@router.get("/my-documents")
+async def get_my_documents(user: dict = Depends(get_current_user)) -> dict:
+    """Получить документы текущего пользователя"""
+    try:
+        db = get_db()
+        res = db.table("documents").select("*").eq("user_id", user["id"]).execute()
+        return success_response(
+            data=res.data or [],
+            message="Documents retrieved"
+        )
+    except Exception as e:
+        logger.error(f"Documents error: {str(e)}")
+        raise HTTPException(500, detail=str(e))
+
+
+@router.get("/my-applications")
+async def get_my_applications(user: dict = Depends(get_current_user)) -> dict:
+    """Получить заявления текущего пользователя"""
+    try:
+        db = get_db()
+        res = db.table("applications").select("*").eq("user_id", user["id"]).execute()
+        return success_response(
+            data=res.data or [],
+            message="Applications retrieved"
+        )
+    except Exception as e:
+        logger.error(f"Applications error: {str(e)}")
+        raise HTTPException(500, detail=str(e))
 
 
 @router.get("/services/{category}")
